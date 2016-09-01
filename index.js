@@ -39,7 +39,7 @@ var Sirena = (function() {
 			headerOrQueryName: 'api-key'
 		};
 
-		console.log('\nSirena API Module has been set up.\n- API URL: ' + this.domain + '\n- API Key:' + this.token.apiKey + '\n');
+		console.log('\nSirena API Module has been set up.\n- API URL: ' + this.domain + '\n- API Key: ' + this.token.apiKey + '\n');
 	}
 
 	Sirena.prototype.request = function(method, url, parameters, body, headers, queryParameters, form, deferred) {
