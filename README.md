@@ -32,8 +32,7 @@ The options are:
 | ------------- | ------------- | ----------------- |
 | apiKey        | string        |   **Required.** The API Key provided by Sirena |
 | isQuery       | boolean       |   If `true`, sends the token as query param, otherwise, send as header param |
-| apiUrl       | boolean       |   Specifies the URL of the API. **Default: `http://api.getsirena.com/v1`**. 
-You can change this when developing, to see if the integration you are settings is ok |
+| apiUrl       | boolean       |   Specifies the URL of the API. **Default: `http://api.getsirena.com/v1`**. You can change this when developing, to see if the integration you are setting is ok |
 
 
 #### Example
