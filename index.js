@@ -34,7 +34,7 @@ var Sirena = (function() {
 
 		this.domain = options.apiUrl || 'http://api.getsirena.com/v1';
 		this.token = {
-			apiKey: options.apiKey,
+			value: options.apiKey,
 			isQuery: options.isQuery || true,
 			headerOrQueryName: 'api-key'
 		};
