@@ -22,7 +22,7 @@ var Sirena = (function() {
 	var request = require('request');
 	var Q = require('q');
 
-	function Sirena(options) {
+	function Sirena(options, debug) {
 
 		if (!options) {
 			throw new Error('An options object parameter is necessary to use the Sirena API Module.');
@@ -39,7 +39,9 @@ var Sirena = (function() {
 			headerOrQueryName: 'api-key'
 		};
 
-		console.log('\nSirena API Module has been set up.\n- API URL: ' + this.domain + '\n- API Key: ' + this.token.value + '\n');
+		if (debug) {
+			console.log('\nSirena API Module has been set up.\n- API URL: ' + this.domain + '\n- API Key: ' + this.token.value + '\n');
+		}
 	}
 
 	Sirena.prototype.request = function(method, url, parameters, body, headers, queryParameters, form, deferred) {
