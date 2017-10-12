@@ -1,20 +1,10 @@
+/*jshint -W069 */
 /**
- * IMPORTANT! This module version is exclusive for Sirena API v1.1.0
- *
- * Code generated with Swagger JS Codegen and a bit modified by the Sirena Team
- * Swagger File: http://api.getsirena.com/swagger.json
- * More info at: 
- * - https://www.npmjs.com/package/swagger-js-codegen
- * - http://ayuda.getsirena.com/
- * 
- */
-
-/**
- * Sirena API Module for lead providers and prospect data manipulation
+ * Sirena API for lead providers and prospect data manipulation
  * @class Sirena
- * @param {string} [apiKey] - The client API Key
- * @param {boolean} [isQuery] - Optional. "true" if send the token as query param, otherwise, send as header param
- * @param {string} [apiUrl] - Optional. The API Url
+ * @param {(string|object)} [domainOrOptions] - The project domain or options object. If object, see the object's optional properties.
+ * @param {string} [domainOrOptions.domain] - The project domain
+ * @param {object} [domainOrOptions.token] - auth token - object with value property and optional headerOrQueryName and isQuery properties
  */
 var Sirena = (function() {
     'use strict';
@@ -22,26 +12,13 @@ var Sirena = (function() {
     var request = require('request');
     var Q = require('q');
 
-	function Sirena(options, debug) {
-        
-        if (!options) {
-            throw new Error('An options object parameter is necessary to use the Sirena API Module.');
+    function Sirena(options) {
+        var domain = (typeof options === 'object') ? options.domain : options;
+        this.domain = domain ? domain : '';
+        if (this.domain.length === 0) {
+            throw new Error('Domain parameter must be specified as a string.');
         }
-
-        if (!options.apiKey || typeof options.apiKey !== 'string') {
-            throw new Error('An API Key string parameter is necessary to connect with the Sirena API.');
-        }
-
-        this.domain = options.apiUrl || 'http://api.getsirena.com/v1';
-        this.token = {
-            value: options.apiKey,
-            isQuery: options.isQuery || true,
-            headerOrQueryName: 'api-key'
-        };
-
-        if (debug) {
-            console.log('\nSirena API Module has been set up.\n- API URL: ' + this.domain + '\n- API Key: ' + this.token.value + '\n');
-        }
+        this.token = (typeof options === 'object') ? (options.token ? options.token : {}) : {};
     }
 
     Sirena.prototype.request = function(method, url, parameters, body, headers, queryParameters, form, deferred) {
@@ -101,6 +78,120 @@ var Sirena = (function() {
         this.token.isQuery = isQuery;
     };
 
+    /**
+     * Processes lead data and returns the matching prospect. If the prospect already exists, previous lead data will not be returned.
+     * @method
+     * @name Sirena#newRetailLead
+     * @param {} lead - Sirena API for lead providers and prospect data manipulation
+     * @param {string} format - An optional flag to force a response format. Note that the API also supports content negotiation and honors the Accept header.
+     * 
+     */
+    Sirena.prototype.newRetailLead = function(parameters) {
+        if (parameters === undefined) {
+            parameters = {};
+        }
+        var deferred = Q.defer();
+
+        var domain = this.domain;
+        var path = '/lead/retail';
+
+        var body;
+        var queryParameters = {};
+        var headers = {};
+        var form = {};
+
+        if (this.token.isQuery) {
+            queryParameters[this.token.headerOrQueryName] = this.token.value;
+        } else if (this.token.headerOrQueryName) {
+            headers[this.token.headerOrQueryName] = this.token.value;
+        } else {
+            headers['Authorization'] = 'Bearer ' + this.token.value;
+        }
+
+        headers['Content-Type'] = ['application/json'];
+
+        if (parameters['lead'] !== undefined) {
+            body = parameters['lead'];
+        }
+
+        if (parameters['lead'] === undefined) {
+            deferred.reject(new Error('Missing required  parameter: lead'));
+            return deferred.promise;
+        }
+
+        if (parameters['format'] !== undefined) {
+            queryParameters['format'] = parameters['format'];
+        }
+
+        if (parameters.$queryParameters) {
+            Object.keys(parameters.$queryParameters)
+                .forEach(function(parameterName) {
+                    var parameter = parameters.$queryParameters[parameterName];
+                    queryParameters[parameterName] = parameter;
+                });
+        }
+
+        this.request('POST', domain + path, parameters, body, headers, queryParameters, form, deferred);
+
+        return deferred.promise;
+    };
+    /**
+     * Processes lead data and returns the matching prospect. If the prospect already exists, previous lead data will not be returned.
+     * @method
+     * @name Sirena#newInsuranceLead
+     * @param {} lead - Sirena API for lead providers and prospect data manipulation
+     * @param {string} format - An optional flag to force a response format. Note that the API also supports content negotiation and honors the Accept header.
+     * 
+     */
+    Sirena.prototype.newInsuranceLead = function(parameters) {
+        if (parameters === undefined) {
+            parameters = {};
+        }
+        var deferred = Q.defer();
+
+        var domain = this.domain;
+        var path = '/lead/insurance';
+
+        var body;
+        var queryParameters = {};
+        var headers = {};
+        var form = {};
+
+        if (this.token.isQuery) {
+            queryParameters[this.token.headerOrQueryName] = this.token.value;
+        } else if (this.token.headerOrQueryName) {
+            headers[this.token.headerOrQueryName] = this.token.value;
+        } else {
+            headers['Authorization'] = 'Bearer ' + this.token.value;
+        }
+
+        headers['Content-Type'] = ['application/json'];
+
+        if (parameters['lead'] !== undefined) {
+            body = parameters['lead'];
+        }
+
+        if (parameters['lead'] === undefined) {
+            deferred.reject(new Error('Missing required  parameter: lead'));
+            return deferred.promise;
+        }
+
+        if (parameters['format'] !== undefined) {
+            queryParameters['format'] = parameters['format'];
+        }
+
+        if (parameters.$queryParameters) {
+            Object.keys(parameters.$queryParameters)
+                .forEach(function(parameterName) {
+                    var parameter = parameters.$queryParameters[parameterName];
+                    queryParameters[parameterName] = parameter;
+                });
+        }
+
+        this.request('POST', domain + path, parameters, body, headers, queryParameters, form, deferred);
+
+        return deferred.promise;
+    };
     /**
      * Vehicle industry only. Processes lead data and returns the matching prospect. If the prospect already exists, previous lead data will not be returned.
      * @method
@@ -311,6 +402,21 @@ var Sirena = (function() {
      * @param {string} end - The end date to filter prospects by their creation date
      * @param {string} claimStart - The start date to filter prospects by their claim date
      * @param {string} claimEnd - The end date to filter prospects by their claim date
+     * @param {array} additionalData - List of filters for additionalData on format `[FIELD][OPERATOR][VALUE]`
+    * FIELD: Can be any additional data field
+    * OPERATOR: Can be =, >=, >, <=, < or ~ (contains)
+    * VALUE\: Any string
+
+    `/prospects?api-key{API_KEY}&additionalData[]=finance=1`
+    Filter all prospect that have additionalData.finance and is equal to `1`
+
+    `/prospects?api-key{API_KEY}&additionalData[]=birthdate<01/01/2000&additionalData[]=birthdate>=01/01/1990`
+    Filter all prospect that have additionalData.birthdate, is greater or equal than `01/01/1990` and lower than `01/01/2000`
+
+
+    `/prospects?api-key{API_KEY}&additionalData[]=style~blue`
+    Filter all prospect that have additionalData.style and contains `blue` string
+
      * @param {string} format - An optional flag to force a response format. Note that the API also supports content negotiation and honors the Accept header.
      * 
      */
@@ -368,6 +474,10 @@ var Sirena = (function() {
 
         if (parameters['claimEnd'] !== undefined) {
             queryParameters['claimEnd'] = parameters['claimEnd'];
+        }
+
+        if (parameters['additionalData'] !== undefined) {
+            queryParameters['additionalData'] = parameters['additionalData'];
         }
 
         if (parameters['format'] !== undefined) {
