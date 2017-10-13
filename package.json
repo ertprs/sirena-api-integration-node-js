@@ -1,6 +1,6 @@
 {
   "name": "sirena-api-integration-node-js",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "description": "Node JS implementation for a custom integration with Sirena API",
   "main": "index.js",
   "scripts": {
