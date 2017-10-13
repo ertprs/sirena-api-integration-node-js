@@ -13,12 +13,24 @@ var Sirena = (function() {
     var Q = require('q');
 
     function Sirena(options) {
-        var domain = (typeof options === 'object') ? options.domain : options;
-        this.domain = domain ? domain : '';
-        if (this.domain.length === 0) {
-            throw new Error('Domain parameter must be specified as a string.');
+        if (!options) {
+            throw new Error('An options object parameter is necessary to use the Sirena API Module.');
         }
-        this.token = (typeof options === 'object') ? (options.token ? options.token : {}) : {};
+
+        if (!options.apiKey || typeof options.apiKey !== 'string') {
+            throw new Error('An API Key string parameter is necessary to connect with the Sirena API.');
+        }
+
+        this.domain = options.apiUrl || 'http://api.getsirena.com/v1';
+        this.token = {
+            value: options.apiKey,
+            isQuery: options.isQuery || true,
+            headerOrQueryName: 'api-key'
+        };
+
+        if (debug) {
+            console.log('\nSirena API Module has been set up.\n- API URL: ' + this.domain + '\n- API Key: ' + this.token.value + '\n');
+        }
     }
 
     Sirena.prototype.request = function(method, url, parameters, body, headers, queryParameters, form, deferred) {
