@@ -12,7 +12,7 @@ var Sirena = (function() {
     var request = require('request');
     var Q = require('q');
 
-    function Sirena(options) {
+	function Sirena(options, debug) {
         if (!options) {
             throw new Error('An options object parameter is necessary to use the Sirena API Module.');
         }
