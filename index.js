@@ -1,6 +1,6 @@
 /*jshint -W069 */
 /**
- * Sirena API for lead providers and prospect data manipulation
+ * Sirena API for lead providers and prospect data manipulation.
  * @class Sirena
  * @param {(string|object)} [domainOrOptions] - The project domain or options object. If object, see the object's optional properties.
  * @param {string} [domainOrOptions.domain] - The project domain
@@ -21,8 +21,13 @@ var Sirena = (function() {
             throw new Error('An API Key string parameter is necessary to connect with the Sirena API.');
         }
 
-        this.domain = options.apiUrl || 'http://api.getsirena.com/v1';
+        this.domain = options.apiUrl || 'https://api.getsirena.com/v1';
         this.token = {
+            value: options.apiKey,
+            isQuery: options.isQuery || true,
+            headerOrQueryName: 'api-key'
+        };
+        this.apiKey = {
             value: options.apiKey,
             isQuery: options.isQuery || true,
             headerOrQueryName: 'api-key'
@@ -33,6 +38,31 @@ var Sirena = (function() {
         }
     }
 
+
+    function mergeQueryParams(parameters, queryParameters) {
+        if (parameters.$queryParameters) {
+            Object.keys(parameters.$queryParameters)
+                .forEach(function(parameterName) {
+                    var parameter = parameters.$queryParameters[parameterName];
+                    queryParameters[parameterName] = parameter;
+                });
+        }
+        return queryParameters;
+    }
+
+    /**
+     * HTTP Request
+     * @method
+     * @name Sirena#request
+     * @param {string} method - http method
+     * @param {string} url - url to do request
+     * @param {object} parameters
+     * @param {object} body - body parameters / object
+     * @param {object} headers - header parameters
+     * @param {object} queryParameters - querystring parameters
+     * @param {object} form - form data object
+     * @param {object} deferred - promise object
+     */
     Sirena.prototype.request = function(method, url, parameters, body, headers, queryParameters, form, deferred) {
         var req = {
             method: method,
@@ -82,44 +112,124 @@ var Sirena = (function() {
      * @param {string} value - token's value
      * @param {string} headerOrQueryName - the header or query name to send the token at
      * @param {boolean} isQuery - true if send the token as query param, otherwise, send as header param
-     *
      */
     Sirena.prototype.setToken = function(value, headerOrQueryName, isQuery) {
         this.token.value = value;
         this.token.headerOrQueryName = headerOrQueryName;
         this.token.isQuery = isQuery;
     };
+    /**
+     * Set Api Key
+     * @method
+     * @name Sirena#setApiKey
+     * @param {string} value - apiKey's value
+     * @param {string} headerOrQueryName - the header or query name to send the apiKey at
+     * @param {boolean} isQuery - true if send the apiKey as query param, otherwise, send as header param
+     */
+    Sirena.prototype.setApiKey = function(value, headerOrQueryName, isQuery) {
+        this.apiKey.value = value;
+        this.apiKey.headerOrQueryName = headerOrQueryName;
+        this.apiKey.isQuery = isQuery;
+    };
+    /**
+     * Set Auth headers
+     * @method
+     * @name Sirena#setAuthHeaders
+     * @param {object} queryParams - headers object
+     */
+    Sirena.prototype.setAuthQueries = function(queryParams) {
+        var queries = queryParams ? queryParams : {};
+        if (this.token.isQuery && this.token.headerOrQueryName) {
+            queries[this.token.headerOrQueryName] = this.token.value;
+        }
+        if (this.apiKey.isQuery && this.apiKey.headerOrQueryName) {
+            queries[this.apiKey.headerOrQueryName] = this.apiKey.value;
+        }
+        return queries;
+    };
+    /**
+     * Set Auth headers
+     * @method
+     * @name Sirena#setAuthHeaders
+     * @param {object} headerParams - headers object
+     */
+    Sirena.prototype.setAuthHeaders = function(headerParams) {
+        var headers = headerParams ? headerParams : {};
+        if (!this.token.isQuery) {
+            if (this.token.headerOrQueryName) {
+                headers[this.token.headerOrQueryName] = this.token.value;
+            } else if (this.token.value) {
+                headers['Authorization'] = 'Bearer ' + this.token.value;
+            }
+        }
+        if (!this.apiKey.isQuery && this.apiKey.headerOrQueryName) {
+            headers[this.apiKey.headerOrQueryName] = this.apiKey.value;
+        }
+        return headers;
+    };
 
+    /**
+     * Check if API Key exists and if it is enabled.
+     * @method
+     * @name Sirena#checkCredentials
+     * @param {object} parameters - method options and parameters
+     * @param {string} parameters.apiKey - API Key to check.
+     */
+    Sirena.prototype.checkCredentials = function(parameters) {
+        if (parameters === undefined) {
+            parameters = {};
+        }
+        var deferred = Q.defer();
+        var domain = this.domain,
+            path = '/checkCredentials';
+        var body = {},
+            queryParameters = {},
+            headers = {},
+            form = {};
+
+        queryParameters = this.setAuthQueries(queryParameters);
+        headers = this.setAuthHeaders(headers);
+        headers['Accept'] = ['application/json, text/csv, text/plain'];
+        headers['Content-Type'] = ['application/json'];
+
+        if (parameters['apiKey'] !== undefined) {
+            queryParameters['api-key'] = parameters['apiKey'];
+        }
+
+        if (parameters['apiKey'] === undefined) {
+            deferred.reject(new Error('Missing required  parameter: apiKey'));
+            return deferred.promise;
+        }
+
+        queryParameters = mergeQueryParams(parameters, queryParameters);
+
+        this.request('GET', domain + path, parameters, body, headers, queryParameters, form, deferred);
+
+        return deferred.promise;
+    };
     /**
      * Processes lead data and returns the matching prospect. If the prospect already exists, previous lead data will not be returned.
      * @method
      * @name Sirena#newRetailLead
-     * @param {} lead - Sirena API for lead providers and prospect data manipulation
-     * @param {string} format - An optional flag to force a response format. Note that the API also supports content negotiation and honors the Accept header.
-     * 
+     * @param {object} parameters - method options and parameters
+     * @param {} parameters.lead - Sirena API for lead providers and prospect data manipulation.
+     * @param {string} parameters.format - An optional flag to force a response format. Note that the API also supports content negotiation and honors the Accept header.
      */
     Sirena.prototype.newRetailLead = function(parameters) {
         if (parameters === undefined) {
             parameters = {};
         }
         var deferred = Q.defer();
+        var domain = this.domain,
+            path = '/lead/retail';
+        var body = {},
+            queryParameters = {},
+            headers = {},
+            form = {};
 
-        var domain = this.domain;
-        var path = '/lead/retail';
-
-        var body;
-        var queryParameters = {};
-        var headers = {};
-        var form = {};
-
-        if (this.token.isQuery) {
-            queryParameters[this.token.headerOrQueryName] = this.token.value;
-        } else if (this.token.headerOrQueryName) {
-            headers[this.token.headerOrQueryName] = this.token.value;
-        } else {
-            headers['Authorization'] = 'Bearer ' + this.token.value;
-        }
-
+        queryParameters = this.setAuthQueries(queryParameters);
+        headers = this.setAuthHeaders(headers);
+        headers['Accept'] = ['application/json, text/csv, text/plain'];
         headers['Content-Type'] = ['application/json'];
 
         if (parameters['lead'] !== undefined) {
@@ -135,13 +245,7 @@ var Sirena = (function() {
             queryParameters['format'] = parameters['format'];
         }
 
-        if (parameters.$queryParameters) {
-            Object.keys(parameters.$queryParameters)
-                .forEach(function(parameterName) {
-                    var parameter = parameters.$queryParameters[parameterName];
-                    queryParameters[parameterName] = parameter;
-                });
-        }
+        queryParameters = mergeQueryParams(parameters, queryParameters);
 
         this.request('POST', domain + path, parameters, body, headers, queryParameters, form, deferred);
 
@@ -151,32 +255,25 @@ var Sirena = (function() {
      * Processes lead data and returns the matching prospect. If the prospect already exists, previous lead data will not be returned.
      * @method
      * @name Sirena#newInsuranceLead
-     * @param {} lead - Sirena API for lead providers and prospect data manipulation
-     * @param {string} format - An optional flag to force a response format. Note that the API also supports content negotiation and honors the Accept header.
-     * 
+     * @param {object} parameters - method options and parameters
+     * @param {} parameters.lead - Sirena API for lead providers and prospect data manipulation.
+     * @param {string} parameters.format - An optional flag to force a response format. Note that the API also supports content negotiation and honors the Accept header.
      */
     Sirena.prototype.newInsuranceLead = function(parameters) {
         if (parameters === undefined) {
             parameters = {};
         }
         var deferred = Q.defer();
+        var domain = this.domain,
+            path = '/lead/insurance';
+        var body = {},
+            queryParameters = {},
+            headers = {},
+            form = {};
 
-        var domain = this.domain;
-        var path = '/lead/insurance';
-
-        var body;
-        var queryParameters = {};
-        var headers = {};
-        var form = {};
-
-        if (this.token.isQuery) {
-            queryParameters[this.token.headerOrQueryName] = this.token.value;
-        } else if (this.token.headerOrQueryName) {
-            headers[this.token.headerOrQueryName] = this.token.value;
-        } else {
-            headers['Authorization'] = 'Bearer ' + this.token.value;
-        }
-
+        queryParameters = this.setAuthQueries(queryParameters);
+        headers = this.setAuthHeaders(headers);
+        headers['Accept'] = ['application/json, text/csv, text/plain'];
         headers['Content-Type'] = ['application/json'];
 
         if (parameters['lead'] !== undefined) {
@@ -192,13 +289,7 @@ var Sirena = (function() {
             queryParameters['format'] = parameters['format'];
         }
 
-        if (parameters.$queryParameters) {
-            Object.keys(parameters.$queryParameters)
-                .forEach(function(parameterName) {
-                    var parameter = parameters.$queryParameters[parameterName];
-                    queryParameters[parameterName] = parameter;
-                });
-        }
+        queryParameters = mergeQueryParams(parameters, queryParameters);
 
         this.request('POST', domain + path, parameters, body, headers, queryParameters, form, deferred);
 
@@ -208,32 +299,25 @@ var Sirena = (function() {
      * Vehicle industry only. Processes lead data and returns the matching prospect. If the prospect already exists, previous lead data will not be returned.
      * @method
      * @name Sirena#newVehicleLead
-     * @param {} lead - Sirena API for lead providers and prospect data manipulation
-     * @param {string} format - An optional flag to force a response format. Note that the API also supports content negotiation and honors the Accept header.
-     * 
+     * @param {object} parameters - method options and parameters
+     * @param {} parameters.lead - Sirena API for lead providers and prospect data manipulation.
+     * @param {string} parameters.format - An optional flag to force a response format. Note that the API also supports content negotiation and honors the Accept header.
      */
     Sirena.prototype.newVehicleLead = function(parameters) {
         if (parameters === undefined) {
             parameters = {};
         }
         var deferred = Q.defer();
+        var domain = this.domain,
+            path = '/lead/vehicle';
+        var body = {},
+            queryParameters = {},
+            headers = {},
+            form = {};
 
-        var domain = this.domain;
-        var path = '/lead/vehicle';
-
-        var body;
-        var queryParameters = {};
-        var headers = {};
-        var form = {};
-
-        if (this.token.isQuery) {
-            queryParameters[this.token.headerOrQueryName] = this.token.value;
-        } else if (this.token.headerOrQueryName) {
-            headers[this.token.headerOrQueryName] = this.token.value;
-        } else {
-            headers['Authorization'] = 'Bearer ' + this.token.value;
-        }
-
+        queryParameters = this.setAuthQueries(queryParameters);
+        headers = this.setAuthHeaders(headers);
+        headers['Accept'] = ['application/json, text/csv, text/plain'];
         headers['Content-Type'] = ['application/json'];
 
         if (parameters['lead'] !== undefined) {
@@ -249,13 +333,7 @@ var Sirena = (function() {
             queryParameters['format'] = parameters['format'];
         }
 
-        if (parameters.$queryParameters) {
-            Object.keys(parameters.$queryParameters)
-                .forEach(function(parameterName) {
-                    var parameter = parameters.$queryParameters[parameterName];
-                    queryParameters[parameterName] = parameter;
-                });
-        }
+        queryParameters = mergeQueryParams(parameters, queryParameters);
 
         this.request('POST', domain + path, parameters, body, headers, queryParameters, form, deferred);
 
@@ -265,32 +343,25 @@ var Sirena = (function() {
      * Saving plan industry only. Processes lead data and returns the matching prospect. If the prospect already exists, previous lead data will not be returned.
      * @method
      * @name Sirena#newSavingPlanLead
-     * @param {} lead - Sirena API for lead providers and prospect data manipulation
-     * @param {string} format - An optional flag to force a response format. Note that the API also supports content negotiation and honors the Accept header.
-     * 
+     * @param {object} parameters - method options and parameters
+     * @param {} parameters.lead - Sirena API for lead providers and prospect data manipulation.
+     * @param {string} parameters.format - An optional flag to force a response format. Note that the API also supports content negotiation and honors the Accept header.
      */
     Sirena.prototype.newSavingPlanLead = function(parameters) {
         if (parameters === undefined) {
             parameters = {};
         }
         var deferred = Q.defer();
+        var domain = this.domain,
+            path = '/lead/saving-plan';
+        var body = {},
+            queryParameters = {},
+            headers = {},
+            form = {};
 
-        var domain = this.domain;
-        var path = '/lead/saving-plan';
-
-        var body;
-        var queryParameters = {};
-        var headers = {};
-        var form = {};
-
-        if (this.token.isQuery) {
-            queryParameters[this.token.headerOrQueryName] = this.token.value;
-        } else if (this.token.headerOrQueryName) {
-            headers[this.token.headerOrQueryName] = this.token.value;
-        } else {
-            headers['Authorization'] = 'Bearer ' + this.token.value;
-        }
-
+        queryParameters = this.setAuthQueries(queryParameters);
+        headers = this.setAuthHeaders(headers);
+        headers['Accept'] = ['application/json, text/csv, text/plain'];
         headers['Content-Type'] = ['application/json'];
 
         if (parameters['lead'] !== undefined) {
@@ -306,13 +377,7 @@ var Sirena = (function() {
             queryParameters['format'] = parameters['format'];
         }
 
-        if (parameters.$queryParameters) {
-            Object.keys(parameters.$queryParameters)
-                .forEach(function(parameterName) {
-                    var parameter = parameters.$queryParameters[parameterName];
-                    queryParameters[parameterName] = parameter;
-                });
-        }
+        queryParameters = mergeQueryParams(parameters, queryParameters);
 
         this.request('POST', domain + path, parameters, body, headers, queryParameters, form, deferred);
 
@@ -322,32 +387,25 @@ var Sirena = (function() {
      * Saving real estate indrustry only. Processes lead data and returns the matching prospect. If the prospect already exists, previous lead data will not be returned.
      * @method
      * @name Sirena#newRealEstateLead
-     * @param {} lead - Sirena API for lead providers and prospect data manipulation
-     * @param {string} format - An optional flag to force a response format. Note that the API also supports content negotiation and honors the Accept header.
-     * 
+     * @param {object} parameters - method options and parameters
+     * @param {} parameters.lead - Sirena API for lead providers and prospect data manipulation.
+     * @param {string} parameters.format - An optional flag to force a response format. Note that the API also supports content negotiation and honors the Accept header.
      */
     Sirena.prototype.newRealEstateLead = function(parameters) {
         if (parameters === undefined) {
             parameters = {};
         }
         var deferred = Q.defer();
+        var domain = this.domain,
+            path = '/lead/real-estate';
+        var body = {},
+            queryParameters = {},
+            headers = {},
+            form = {};
 
-        var domain = this.domain;
-        var path = '/lead/real-estate';
-
-        var body;
-        var queryParameters = {};
-        var headers = {};
-        var form = {};
-
-        if (this.token.isQuery) {
-            queryParameters[this.token.headerOrQueryName] = this.token.value;
-        } else if (this.token.headerOrQueryName) {
-            headers[this.token.headerOrQueryName] = this.token.value;
-        } else {
-            headers['Authorization'] = 'Bearer ' + this.token.value;
-        }
-
+        queryParameters = this.setAuthQueries(queryParameters);
+        headers = this.setAuthHeaders(headers);
+        headers['Accept'] = ['application/json, text/csv, text/plain'];
         headers['Content-Type'] = ['application/json'];
 
         if (parameters['lead'] !== undefined) {
@@ -363,163 +421,139 @@ var Sirena = (function() {
             queryParameters['format'] = parameters['format'];
         }
 
-        if (parameters.$queryParameters) {
-            Object.keys(parameters.$queryParameters)
-                .forEach(function(parameterName) {
-                    var parameter = parameters.$queryParameters[parameterName];
-                    queryParameters[parameterName] = parameter;
-                });
-        }
+        queryParameters = mergeQueryParams(parameters, queryParameters);
 
         this.request('POST', domain + path, parameters, body, headers, queryParameters, form, deferred);
 
         return deferred.promise;
     };
     /**
-     * Returns information about the lead categories available for lead creation in each industry. The response includes the name and other details about each category. The default category is returned first.
+     * Returns information about the lead categories available for lead creation. Note that groups can define custom rules as to when a category is valid for a given lead or not.
      * @method
      * @name Sirena#getCategories
-     * 
+     * @param {object} parameters - method options and parameters
      */
     Sirena.prototype.getCategories = function(parameters) {
         if (parameters === undefined) {
             parameters = {};
         }
         var deferred = Q.defer();
+        var domain = this.domain,
+            path = '/leads/categories';
+        var body = {},
+            queryParameters = {},
+            headers = {},
+            form = {};
 
-        var domain = this.domain;
-        var path = '/leads/categories';
-
-        var body;
-        var queryParameters = {};
-        var headers = {};
-        var form = {};
-
-        if (this.token.isQuery) {
-            queryParameters[this.token.headerOrQueryName] = this.token.value;
-        } else if (this.token.headerOrQueryName) {
-            headers[this.token.headerOrQueryName] = this.token.value;
-        } else {
-            headers['Authorization'] = 'Bearer ' + this.token.value;
-        }
-
+        queryParameters = this.setAuthQueries(queryParameters);
+        headers = this.setAuthHeaders(headers);
+        headers['Accept'] = ['application/json, text/csv, text/plain'];
         headers['Content-Type'] = ['application/json'];
 
-        if (parameters.$queryParameters) {
-            Object.keys(parameters.$queryParameters)
-                .forEach(function(parameterName) {
-                    var parameter = parameters.$queryParameters[parameterName];
-                    queryParameters[parameterName] = parameter;
-                });
-        }
+        queryParameters = mergeQueryParams(parameters, queryParameters);
 
         this.request('GET', domain + path, parameters, body, headers, queryParameters, form, deferred);
 
         return deferred.promise;
     };
     /**
-     * Returns information about the applicable defaults for lead creation. These defaults are only used if no value is specified when creating a lead. The response includes the default currency and category (by industry). Note that the default category can also be found using the Categories endpoint.
+     * Returns information about the applicable defaults for lead creation. These defaults are only used if no value is specified when creating a lead. The response includes the default currency and distance unit.
      * @method
      * @name Sirena#getDefaults
-     * 
+     * @param {object} parameters - method options and parameters
      */
     Sirena.prototype.getDefaults = function(parameters) {
         if (parameters === undefined) {
             parameters = {};
         }
         var deferred = Q.defer();
+        var domain = this.domain,
+            path = '/leads/defaults';
+        var body = {},
+            queryParameters = {},
+            headers = {},
+            form = {};
 
-        var domain = this.domain;
-        var path = '/leads/defaults';
-
-        var body;
-        var queryParameters = {};
-        var headers = {};
-        var form = {};
-
-        if (this.token.isQuery) {
-            queryParameters[this.token.headerOrQueryName] = this.token.value;
-        } else if (this.token.headerOrQueryName) {
-            headers[this.token.headerOrQueryName] = this.token.value;
-        } else {
-            headers['Authorization'] = 'Bearer ' + this.token.value;
-        }
-
+        queryParameters = this.setAuthQueries(queryParameters);
+        headers = this.setAuthHeaders(headers);
+        headers['Accept'] = ['application/json, text/csv, text/plain'];
         headers['Content-Type'] = ['application/json'];
 
-        if (parameters.$queryParameters) {
-            Object.keys(parameters.$queryParameters)
-                .forEach(function(parameterName) {
-                    var parameter = parameters.$queryParameters[parameterName];
-                    queryParameters[parameterName] = parameter;
-                });
-        }
+        queryParameters = mergeQueryParams(parameters, queryParameters);
 
         this.request('GET', domain + path, parameters, body, headers, queryParameters, form, deferred);
 
         return deferred.promise;
     };
     /**
-     * Returns a filterable list of prospects
+     * Returns a filterable list of prospects.
      * @method
      * @name Sirena#getProspects
-     * @param {string} search - A search string to filter prospects. It can be a phone number, an email address or a name.
-     * @param {string} category - The category to filter prospects
-     * @param {string} status - The status to filter prospects
-     * @param {string} agent - The id of an agent to filter prospects
-     * @param {string} createdAfter - The start date to filter prospects by their creation date
-     * @param {string} start - @deprecated - use createdAfter
-    The start date to filter prospects by their creation date (alias of createdAfter)
+     * @param {object} parameters - method options and parameters
+         * @param {string} parameters.before - Limits the results only to the prospects created before the one provided in this parameter (not included)
+         * @param {string} parameters.after - Limits the results only to the prospects created after the one provided in this parameter (not included)
+         * @param {number} parameters.limit - The maximum number of items that must be returned (A multiple number of 100 and no more than 1000 is recommended)
+         * @param {string} parameters.search - A search string to filter prospects. It can be a phone number, an email address or a name.
+         * @param {string} parameters.category - The category to filter prospects.
+         * @param {string} parameters.status - The status to filter prospects.
+         * @param {string} parameters.agent - The id of an agent to filter prospects
+         * @param {string} parameters.createdAfter - The start date to filter prospects by their creation date
+         * @param {string} parameters.start - @deprecated - use createdAfter
+    The start date to filter prospects by their creation date (alias of createdAfter).
 
-     * @param {string} createdBefore - The end date to filter prospects by their creation date
-     * @param {string} end - @deprecated - use createdBefore
-    The end date to filter prospects by their creation date (alias of createdBefore)
+         * @param {string} parameters.createdBefore - The end date to filter prospects by their creation date.
+         * @param {string} parameters.end - @deprecated - use createdBefore
+    The end date to filter prospects by their creation date (alias of createdBefore).
 
-     * @param {string} claimedAfter - The start date to filter prospects by their claim date
-     * @param {string} claimStart - The start date to filter prospects by their claim date (alias of claimAfter)
-     * @param {string} claimedBefore - The end date to filter prospects by their claim date
-     * @param {string} claimEnd - The end date to filter prospects by their claim date (alias of claimBefore)
-     * @param {array} additionalData - List of filters for additionalData on format `[FIELD][OPERATOR][VALUE]`
+         * @param {string} parameters.claimedAfter - The start date to filter prospects by their claim date.
+         * @param {string} parameters.claimStart - The start date to filter prospects by their claim date (alias of claimAfter).
+         * @param {string} parameters.claimedBefore - The end date to filter prospects by their claim date.
+         * @param {string} parameters.claimEnd - The end date to filter prospects by their claim date (alias of claimBefore).
+         * @param {array} parameters.additionalData - List of filters for additionalData on format `[FIELD][OPERATOR][VALUE]`.
     * FIELD: Can be any additional data field
     * OPERATOR: Can be =, >=, >, <=, < or ~ (contains)
     * VALUE\: Any string
 
     `/prospects?api-key{API_KEY}&additionalData[]=finance=1`
-    Filter all prospect that have additionalData.finance and is equal to `1`
+    Filter all prospect that have additionalData.finance and is equal to `1`.
 
     `/prospects?api-key{API_KEY}&additionalData[]=birthdate<01/01/2000&additionalData[]=birthdate>=01/01/1990`
-    Filter all prospect that have additionalData.birthdate, is greater or equal than `01/01/1990` and lower than `01/01/2000`
+    Filter all prospect that have additionalData.birthdate, is greater or equal than `01/01/1990` and lower than `01/01/2000`.
 
 
     `/prospects?api-key{API_KEY}&additionalData[]=style~blue`
-    Filter all prospect that have additionalData.style and contains `blue` string
+    Filter all prospect that have additionalData.style and contains `blue` string.
 
-     * @param {string} format - An optional flag to force a response format. Note that the API also supports content negotiation and honors the Accept header.
-     * 
+         * @param {string} parameters.format - An optional flag to force a response format. Note that the API also supports content negotiation and honors the Accept header.
      */
     Sirena.prototype.getProspects = function(parameters) {
         if (parameters === undefined) {
             parameters = {};
         }
         var deferred = Q.defer();
+        var domain = this.domain,
+            path = '/prospects';
+        var body = {},
+            queryParameters = {},
+            headers = {},
+            form = {};
 
-        var domain = this.domain;
-        var path = '/prospects';
+        queryParameters = this.setAuthQueries(queryParameters);
+        headers = this.setAuthHeaders(headers);
+        headers['Accept'] = ['application/json, text/csv, text/plain'];
+        headers['Content-Type'] = ['application/json'];
 
-        var body;
-        var queryParameters = {};
-        var headers = {};
-        var form = {};
-
-        if (this.token.isQuery) {
-            queryParameters[this.token.headerOrQueryName] = this.token.value;
-        } else if (this.token.headerOrQueryName) {
-            headers[this.token.headerOrQueryName] = this.token.value;
-        } else {
-            headers['Authorization'] = 'Bearer ' + this.token.value;
+        if (parameters['before'] !== undefined) {
+            queryParameters['before'] = parameters['before'];
         }
 
-        headers['Content-Type'] = ['application/json'];
+        if (parameters['after'] !== undefined) {
+            queryParameters['after'] = parameters['after'];
+        }
+
+        if (parameters['limit'] !== undefined) {
+            queryParameters['limit'] = parameters['limit'];
+        }
 
         if (parameters['search'] !== undefined) {
             queryParameters['search'] = parameters['search'];
@@ -577,48 +611,35 @@ var Sirena = (function() {
             queryParameters['format'] = parameters['format'];
         }
 
-        if (parameters.$queryParameters) {
-            Object.keys(parameters.$queryParameters)
-                .forEach(function(parameterName) {
-                    var parameter = parameters.$queryParameters[parameterName];
-                    queryParameters[parameterName] = parameter;
-                });
-        }
+        queryParameters = mergeQueryParams(parameters, queryParameters);
 
         this.request('GET', domain + path, parameters, body, headers, queryParameters, form, deferred);
 
         return deferred.promise;
     };
     /**
-     * Returns an specific prospect by its ID
+     * Returns an specific prospect by its ID.
      * @method
      * @name Sirena#getProspectById
-     * @param {string} prospectId - The id of the prospect
-     * @param {string} format - An optional flag to force a response format. Note that the API also supports content negotiation and honors the Accept header.
-     * 
+     * @param {object} parameters - method options and parameters
+     * @param {string} parameters.prospectId - The id of the prospect.
+     * @param {string} parameters.format - An optional flag to force a response format. Note that the API also supports content negotiation and honors the Accept header.
      */
     Sirena.prototype.getProspectById = function(parameters) {
         if (parameters === undefined) {
             parameters = {};
         }
         var deferred = Q.defer();
+        var domain = this.domain,
+            path = '/prospect/{prospectId}';
+        var body = {},
+            queryParameters = {},
+            headers = {},
+            form = {};
 
-        var domain = this.domain;
-        var path = '/prospect/{prospectId}';
-
-        var body;
-        var queryParameters = {};
-        var headers = {};
-        var form = {};
-
-        if (this.token.isQuery) {
-            queryParameters[this.token.headerOrQueryName] = this.token.value;
-        } else if (this.token.headerOrQueryName) {
-            headers[this.token.headerOrQueryName] = this.token.value;
-        } else {
-            headers['Authorization'] = 'Bearer ' + this.token.value;
-        }
-
+        queryParameters = this.setAuthQueries(queryParameters);
+        headers = this.setAuthHeaders(headers);
+        headers['Accept'] = ['application/json, text/csv, text/plain'];
         headers['Content-Type'] = ['application/json'];
 
         path = path.replace('{prospectId}', parameters['prospectId']);
@@ -632,48 +653,35 @@ var Sirena = (function() {
             queryParameters['format'] = parameters['format'];
         }
 
-        if (parameters.$queryParameters) {
-            Object.keys(parameters.$queryParameters)
-                .forEach(function(parameterName) {
-                    var parameter = parameters.$queryParameters[parameterName];
-                    queryParameters[parameterName] = parameter;
-                });
-        }
+        queryParameters = mergeQueryParams(parameters, queryParameters);
 
         this.request('GET', domain + path, parameters, body, headers, queryParameters, form, deferred);
 
         return deferred.promise;
     };
     /**
-     * Delete a prospect
+     * Delete a prospect.
      * @method
      * @name Sirena#deleteProspect
-     * @param {string} prospectId - The id of the prospect
-     * @param {string} format - An optional flag to force a response format. Note that the API also supports content negotiation and honors the Accept header.
-     * 
+     * @param {object} parameters - method options and parameters
+     * @param {string} parameters.prospectId - The id of the prospect.
+     * @param {string} parameters.format - An optional flag to force a response format. Note that the API also supports content negotiation and honors the Accept header.
      */
     Sirena.prototype.deleteProspect = function(parameters) {
         if (parameters === undefined) {
             parameters = {};
         }
         var deferred = Q.defer();
+        var domain = this.domain,
+            path = '/prospect/{prospectId}';
+        var body = {},
+            queryParameters = {},
+            headers = {},
+            form = {};
 
-        var domain = this.domain;
-        var path = '/prospect/{prospectId}';
-
-        var body;
-        var queryParameters = {};
-        var headers = {};
-        var form = {};
-
-        if (this.token.isQuery) {
-            queryParameters[this.token.headerOrQueryName] = this.token.value;
-        } else if (this.token.headerOrQueryName) {
-            headers[this.token.headerOrQueryName] = this.token.value;
-        } else {
-            headers['Authorization'] = 'Bearer ' + this.token.value;
-        }
-
+        queryParameters = this.setAuthQueries(queryParameters);
+        headers = this.setAuthHeaders(headers);
+        headers['Accept'] = ['application/json, text/csv, text/plain'];
         headers['Content-Type'] = ['application/json'];
 
         path = path.replace('{prospectId}', parameters['prospectId']);
@@ -687,57 +695,45 @@ var Sirena = (function() {
             queryParameters['format'] = parameters['format'];
         }
 
-        if (parameters.$queryParameters) {
-            Object.keys(parameters.$queryParameters)
-                .forEach(function(parameterName) {
-                    var parameter = parameters.$queryParameters[parameterName];
-                    queryParameters[parameterName] = parameter;
-                });
-        }
+        queryParameters = mergeQueryParams(parameters, queryParameters);
 
         this.request('DELETE', domain + path, parameters, body, headers, queryParameters, form, deferred);
 
         return deferred.promise;
     };
     /**
-     * Returns a filterable list of interactions related to a prospect
+     * Returns a filterable list of interactions related to a prospect.
      * @method
      * @name Sirena#getProspectInteractions
-     * @param {string} status - The status to filter interactions
-     * @param {string} createdAfter - The start date to filter interactions by their creation date
-     * @param {string} start - @deprecated - use createdAfter
-    The start date to filter interactions by their creation date (alias of createdAfter)
+     * @param {object} parameters - method options and parameters
+         * @param {string} parameters.status - The status to filter interactions.
+         * @param {string} parameters.createdAfter - The start date to filter interactions by their creation date.
+         * @param {string} parameters.start - @deprecated - use createdAfter
+    The start date to filter interactions by their creation date (alias of createdAfter).
 
-     * @param {string} createdBefore - @deprecated - use createdBefore
-    The end date to filter interactions by their creation date
+         * @param {string} parameters.createdBefore - The end date to filter interactions by their creation date.
+         * @param {string} parameters.end - @deprecated - use createdBefore
+    The end date to filter interactions by their creation date (alias of createdBefore).
 
-     * @param {string} end - The end date to filter interactions by their creation date (alias of createdBefore)
-     * @param {string} prospectId - The id of the prospect
-     * @param {string} format - An optional flag to force a response format. Note that the API also supports content negotiation and honors the Accept header.
-     * 
+         * @param {array} parameters.via - Sirena API for lead providers and prospect data manipulation.
+         * @param {string} parameters.prospectId - The id of the prospect.
+         * @param {string} parameters.format - An optional flag to force a response format. Note that the API also supports content negotiation and honors the Accept header.
      */
     Sirena.prototype.getProspectInteractions = function(parameters) {
         if (parameters === undefined) {
             parameters = {};
         }
         var deferred = Q.defer();
+        var domain = this.domain,
+            path = '/prospect/{prospectId}/interactions';
+        var body = {},
+            queryParameters = {},
+            headers = {},
+            form = {};
 
-        var domain = this.domain;
-        var path = '/prospect/{prospectId}/interactions';
-
-        var body;
-        var queryParameters = {};
-        var headers = {};
-        var form = {};
-
-        if (this.token.isQuery) {
-            queryParameters[this.token.headerOrQueryName] = this.token.value;
-        } else if (this.token.headerOrQueryName) {
-            headers[this.token.headerOrQueryName] = this.token.value;
-        } else {
-            headers['Authorization'] = 'Bearer ' + this.token.value;
-        }
-
+        queryParameters = this.setAuthQueries(queryParameters);
+        headers = this.setAuthHeaders(headers);
+        headers['Accept'] = ['application/json, text/csv, text/plain'];
         headers['Content-Type'] = ['application/json'];
 
         if (parameters['status'] !== undefined) {
@@ -760,6 +756,10 @@ var Sirena = (function() {
             queryParameters['end'] = parameters['end'];
         }
 
+        if (parameters['via'] !== undefined) {
+            queryParameters['via'] = parameters['via'];
+        }
+
         path = path.replace('{prospectId}', parameters['prospectId']);
 
         if (parameters['prospectId'] === undefined) {
@@ -771,49 +771,36 @@ var Sirena = (function() {
             queryParameters['format'] = parameters['format'];
         }
 
-        if (parameters.$queryParameters) {
-            Object.keys(parameters.$queryParameters)
-                .forEach(function(parameterName) {
-                    var parameter = parameters.$queryParameters[parameterName];
-                    queryParameters[parameterName] = parameter;
-                });
-        }
+        queryParameters = mergeQueryParams(parameters, queryParameters);
 
         this.request('GET', domain + path, parameters, body, headers, queryParameters, form, deferred);
 
         return deferred.promise;
     };
     /**
-     * Returns an interaction by its prospect and interaction IDs
+     * Returns an interaction by its prospect and interaction IDs.
      * @method
      * @name Sirena#getInteractionById
-     * @param {string} prospectId - The id of the prospect
-     * @param {string} interactionId - The id of the interaction
-     * @param {string} format - An optional flag to force a response format. Note that the API also supports content negotiation and honors the Accept header.
-     * 
+     * @param {object} parameters - method options and parameters
+     * @param {string} parameters.prospectId - The id of the prospect.
+     * @param {string} parameters.interactionId - The id of the interaction.
+     * @param {string} parameters.format - An optional flag to force a response format. Note that the API also supports content negotiation and honors the Accept header.
      */
     Sirena.prototype.getInteractionById = function(parameters) {
         if (parameters === undefined) {
             parameters = {};
         }
         var deferred = Q.defer();
+        var domain = this.domain,
+            path = '/prospect/{prospectId}/interaction/{interactionId}';
+        var body = {},
+            queryParameters = {},
+            headers = {},
+            form = {};
 
-        var domain = this.domain;
-        var path = '/prospect/{prospectId}/interaction/{interactionId}';
-
-        var body;
-        var queryParameters = {};
-        var headers = {};
-        var form = {};
-
-        if (this.token.isQuery) {
-            queryParameters[this.token.headerOrQueryName] = this.token.value;
-        } else if (this.token.headerOrQueryName) {
-            headers[this.token.headerOrQueryName] = this.token.value;
-        } else {
-            headers['Authorization'] = 'Bearer ' + this.token.value;
-        }
-
+        queryParameters = this.setAuthQueries(queryParameters);
+        headers = this.setAuthHeaders(headers);
+        headers['Accept'] = ['application/json, text/csv, text/plain'];
         headers['Content-Type'] = ['application/json'];
 
         path = path.replace('{prospectId}', parameters['prospectId']);
@@ -834,58 +821,61 @@ var Sirena = (function() {
             queryParameters['format'] = parameters['format'];
         }
 
-        if (parameters.$queryParameters) {
-            Object.keys(parameters.$queryParameters)
-                .forEach(function(parameterName) {
-                    var parameter = parameters.$queryParameters[parameterName];
-                    queryParameters[parameterName] = parameter;
-                });
-        }
+        queryParameters = mergeQueryParams(parameters, queryParameters);
 
         this.request('GET', domain + path, parameters, body, headers, queryParameters, form, deferred);
 
         return deferred.promise;
     };
     /**
-     * Returns a filterable list of interactions
+     * Returns a filterable list of interactions.
      * @method
      * @name Sirena#getInteractions
-     * @param {string} agent - The id of the agent to filter
-     * @param {string} status - The status to filter
-     * @param {string} createdAfter - The start date to filter interactions by their creation date
-     * @param {string} start - @deprecated - use createdAfter
-    The start date to filter interactions by their creation date (alias of createdAfter)
+     * @param {object} parameters - method options and parameters
+         * @param {string} parameters.before - Limits the results only to the prospects created before the one provided in this parameter (not included)
+         * @param {string} parameters.after - Limits the results only to the prospects created after the one provided in this parameter (not included)
+         * @param {number} parameters.limit - The maximum number of items that must be returned (A multiple number of 100 and no more than 1000 is recommended)
+         * @param {string} parameters.agent - The id of the agent to filter.
+         * @param {string} parameters.status - The status to filter.
+         * @param {string} parameters.createdAfter - The start date to filter interactions by their creation date.
+         * @param {string} parameters.start - @deprecated - use createdAfter
+    The start date to filter interactions by their creation date (alias of createdAfter).
 
-     * @param {string} createdBefore - The end date to filter interactions by their creation date
-     * @param {string} end - @deprecated - use createdBefore
-    The end date to filter interactions by their creation date (alias of createdBefore)
+         * @param {string} parameters.createdBefore - The end date to filter interactions by their creation date.
+         * @param {string} parameters.end - @deprecated - use createdBefore
+    The end date to filter interactions by their creation date (alias of createdBefore).
 
-     * @param {string} format - An optional flag to force a response format. Note that the API also supports content negotiation and honors the Accept header.
-     * 
+         * @param {array} parameters.via - Sirena API for lead providers and prospect data manipulation.
+         * @param {string} parameters.format - An optional flag to force a response format. Note that the API also supports content negotiation and honors the Accept header.
      */
     Sirena.prototype.getInteractions = function(parameters) {
         if (parameters === undefined) {
             parameters = {};
         }
         var deferred = Q.defer();
+        var domain = this.domain,
+            path = '/prospects/interactions';
+        var body = {},
+            queryParameters = {},
+            headers = {},
+            form = {};
 
-        var domain = this.domain;
-        var path = '/prospects/interactions';
+        queryParameters = this.setAuthQueries(queryParameters);
+        headers = this.setAuthHeaders(headers);
+        headers['Accept'] = ['application/json, text/csv, text/plain'];
+        headers['Content-Type'] = ['application/json'];
 
-        var body;
-        var queryParameters = {};
-        var headers = {};
-        var form = {};
-
-        if (this.token.isQuery) {
-            queryParameters[this.token.headerOrQueryName] = this.token.value;
-        } else if (this.token.headerOrQueryName) {
-            headers[this.token.headerOrQueryName] = this.token.value;
-        } else {
-            headers['Authorization'] = 'Bearer ' + this.token.value;
+        if (parameters['before'] !== undefined) {
+            queryParameters['before'] = parameters['before'];
         }
 
-        headers['Content-Type'] = ['application/json'];
+        if (parameters['after'] !== undefined) {
+            queryParameters['after'] = parameters['after'];
+        }
+
+        if (parameters['limit'] !== undefined) {
+            queryParameters['limit'] = parameters['limit'];
+        }
 
         if (parameters['agent'] !== undefined) {
             queryParameters['agent'] = parameters['agent'];
@@ -911,59 +901,50 @@ var Sirena = (function() {
             queryParameters['end'] = parameters['end'];
         }
 
+        if (parameters['via'] !== undefined) {
+            queryParameters['via'] = parameters['via'];
+        }
+
         if (parameters['format'] !== undefined) {
             queryParameters['format'] = parameters['format'];
         }
 
-        if (parameters.$queryParameters) {
-            Object.keys(parameters.$queryParameters)
-                .forEach(function(parameterName) {
-                    var parameter = parameters.$queryParameters[parameterName];
-                    queryParameters[parameterName] = parameter;
-                });
-        }
+        queryParameters = mergeQueryParams(parameters, queryParameters);
 
         this.request('GET', domain + path, parameters, body, headers, queryParameters, form, deferred);
 
         return deferred.promise;
     };
     /**
-     * Returns a filterable list of quotes related to a prospect
+     * Returns a filterable list of quotes related to a prospect.
      * @method
      * @name Sirena#getProspectQuotes
-     * @param {string} status - The status to filter
-     * @param {string} createdBefore - The start date to filter quotes by their creation date
-     * @param {string} createdAfter - The end date to filter quotes by their creation date
-     * @param {string} acceptedBefore - The start date to filter quotes by their accepted date
-     * @param {string} acceptedAfter - The end date to filter quotes by their accepted date
-     * @param {string} rejectedBefore - The start date to filter quotes by their rejected date
-     * @param {string} rejectedAfter - The end date to filter quotes by their rejected date
-     * @param {string} prospectId - The id of the prospect
-     * @param {string} format - An optional flag to force a response format. Note that the API also supports content negotiation and honors the Accept header.
-     * 
+     * @param {object} parameters - method options and parameters
+     * @param {string} parameters.status - The status to filter.
+     * @param {string} parameters.createdBefore - The start date to filter quotes by their creation date.
+     * @param {string} parameters.createdAfter - The end date to filter quotes by their creation date.
+     * @param {string} parameters.acceptedBefore - The start date to filter quotes by their accepted date.
+     * @param {string} parameters.acceptedAfter - The end date to filter quotes by their accepted date.
+     * @param {string} parameters.rejectedBefore - The start date to filter quotes by their rejected date.
+     * @param {string} parameters.rejectedAfter - The end date to filter quotes by their rejected date.
+     * @param {string} parameters.prospectId - The id of the prospect.
+     * @param {string} parameters.format - An optional flag to force a response format. Note that the API also supports content negotiation and honors the Accept header.
      */
     Sirena.prototype.getProspectQuotes = function(parameters) {
         if (parameters === undefined) {
             parameters = {};
         }
         var deferred = Q.defer();
+        var domain = this.domain,
+            path = '/prospect/{prospectId}/quotes';
+        var body = {},
+            queryParameters = {},
+            headers = {},
+            form = {};
 
-        var domain = this.domain;
-        var path = '/prospect/{prospectId}/quotes';
-
-        var body;
-        var queryParameters = {};
-        var headers = {};
-        var form = {};
-
-        if (this.token.isQuery) {
-            queryParameters[this.token.headerOrQueryName] = this.token.value;
-        } else if (this.token.headerOrQueryName) {
-            headers[this.token.headerOrQueryName] = this.token.value;
-        } else {
-            headers['Authorization'] = 'Bearer ' + this.token.value;
-        }
-
+        queryParameters = this.setAuthQueries(queryParameters);
+        headers = this.setAuthHeaders(headers);
+        headers['Accept'] = ['application/json, text/csv, text/plain'];
         headers['Content-Type'] = ['application/json'];
 
         if (parameters['status'] !== undefined) {
@@ -1005,49 +986,36 @@ var Sirena = (function() {
             queryParameters['format'] = parameters['format'];
         }
 
-        if (parameters.$queryParameters) {
-            Object.keys(parameters.$queryParameters)
-                .forEach(function(parameterName) {
-                    var parameter = parameters.$queryParameters[parameterName];
-                    queryParameters[parameterName] = parameter;
-                });
-        }
+        queryParameters = mergeQueryParams(parameters, queryParameters);
 
         this.request('GET', domain + path, parameters, body, headers, queryParameters, form, deferred);
 
         return deferred.promise;
     };
     /**
-     * Create quote for prospect
+     * Create quote for prospect.
      * @method
      * @name Sirena#newProspectQuote
-     * @param {} quote - Sirena API for lead providers and prospect data manipulation
-     * @param {string} prospectId - The id of the prospect
-     * @param {string} format - An optional flag to force a response format. Note that the API also supports content negotiation and honors the Accept header.
-     * 
+     * @param {object} parameters - method options and parameters
+     * @param {} parameters.quote - Sirena API for lead providers and prospect data manipulation.
+     * @param {string} parameters.prospectId - The id of the prospect.
+     * @param {string} parameters.format - An optional flag to force a response format. Note that the API also supports content negotiation and honors the Accept header.
      */
     Sirena.prototype.newProspectQuote = function(parameters) {
         if (parameters === undefined) {
             parameters = {};
         }
         var deferred = Q.defer();
+        var domain = this.domain,
+            path = '/prospect/{prospectId}/quotes';
+        var body = {},
+            queryParameters = {},
+            headers = {},
+            form = {};
 
-        var domain = this.domain;
-        var path = '/prospect/{prospectId}/quotes';
-
-        var body;
-        var queryParameters = {};
-        var headers = {};
-        var form = {};
-
-        if (this.token.isQuery) {
-            queryParameters[this.token.headerOrQueryName] = this.token.value;
-        } else if (this.token.headerOrQueryName) {
-            headers[this.token.headerOrQueryName] = this.token.value;
-        } else {
-            headers['Authorization'] = 'Bearer ' + this.token.value;
-        }
-
+        queryParameters = this.setAuthQueries(queryParameters);
+        headers = this.setAuthHeaders(headers);
+        headers['Accept'] = ['application/json, text/csv, text/plain'];
         headers['Content-Type'] = ['application/json'];
 
         if (parameters['quote'] !== undefined) {
@@ -1070,49 +1038,36 @@ var Sirena = (function() {
             queryParameters['format'] = parameters['format'];
         }
 
-        if (parameters.$queryParameters) {
-            Object.keys(parameters.$queryParameters)
-                .forEach(function(parameterName) {
-                    var parameter = parameters.$queryParameters[parameterName];
-                    queryParameters[parameterName] = parameter;
-                });
-        }
+        queryParameters = mergeQueryParams(parameters, queryParameters);
 
         this.request('POST', domain + path, parameters, body, headers, queryParameters, form, deferred);
 
         return deferred.promise;
     };
     /**
-     * Returns a quote by its prospect and quote IDs
+     * Returns a quote by its prospect and quote IDs.
      * @method
      * @name Sirena#getQuoteById
-     * @param {string} prospectId - The id of the prospect
-     * @param {string} quoteId - The id of the quote
-     * @param {string} format - An optional flag to force a response format. Note that the API also supports content negotiation and honors the Accept header.
-     * 
+     * @param {object} parameters - method options and parameters
+     * @param {string} parameters.prospectId - The id of the prospect.
+     * @param {string} parameters.quoteId - The id of the quote.
+     * @param {string} parameters.format - An optional flag to force a response format. Note that the API also supports content negotiation and honors the Accept header.
      */
     Sirena.prototype.getQuoteById = function(parameters) {
         if (parameters === undefined) {
             parameters = {};
         }
         var deferred = Q.defer();
+        var domain = this.domain,
+            path = '/prospect/{prospectId}/quote/{quoteId}';
+        var body = {},
+            queryParameters = {},
+            headers = {},
+            form = {};
 
-        var domain = this.domain;
-        var path = '/prospect/{prospectId}/quote/{quoteId}';
-
-        var body;
-        var queryParameters = {};
-        var headers = {};
-        var form = {};
-
-        if (this.token.isQuery) {
-            queryParameters[this.token.headerOrQueryName] = this.token.value;
-        } else if (this.token.headerOrQueryName) {
-            headers[this.token.headerOrQueryName] = this.token.value;
-        } else {
-            headers['Authorization'] = 'Bearer ' + this.token.value;
-        }
-
+        queryParameters = this.setAuthQueries(queryParameters);
+        headers = this.setAuthHeaders(headers);
+        headers['Accept'] = ['application/json, text/csv, text/plain'];
         headers['Content-Type'] = ['application/json'];
 
         path = path.replace('{prospectId}', parameters['prospectId']);
@@ -1133,50 +1088,37 @@ var Sirena = (function() {
             queryParameters['format'] = parameters['format'];
         }
 
-        if (parameters.$queryParameters) {
-            Object.keys(parameters.$queryParameters)
-                .forEach(function(parameterName) {
-                    var parameter = parameters.$queryParameters[parameterName];
-                    queryParameters[parameterName] = parameter;
-                });
-        }
+        queryParameters = mergeQueryParams(parameters, queryParameters);
 
         this.request('GET', domain + path, parameters, body, headers, queryParameters, form, deferred);
 
         return deferred.promise;
     };
     /**
-     * Update quote for prospect by prospect and quote IDs
+     * Update quote for prospect by prospect and quote IDs.
      * @method
      * @name Sirena#updateProspectQuote
-     * @param {} quote - Sirena API for lead providers and prospect data manipulation
-     * @param {string} prospectId - The id of the prospect
-     * @param {string} quoteId - The id of the quote
-     * @param {string} format - An optional flag to force a response format. Note that the API also supports content negotiation and honors the Accept header.
-     * 
+     * @param {object} parameters - method options and parameters
+     * @param {} parameters.quote - Sirena API for lead providers and prospect data manipulation.
+     * @param {string} parameters.prospectId - The id of the prospect.
+     * @param {string} parameters.quoteId - The id of the quote.
+     * @param {string} parameters.format - An optional flag to force a response format. Note that the API also supports content negotiation and honors the Accept header.
      */
     Sirena.prototype.updateProspectQuote = function(parameters) {
         if (parameters === undefined) {
             parameters = {};
         }
         var deferred = Q.defer();
+        var domain = this.domain,
+            path = '/prospect/{prospectId}/quote/{quoteId}';
+        var body = {},
+            queryParameters = {},
+            headers = {},
+            form = {};
 
-        var domain = this.domain;
-        var path = '/prospect/{prospectId}/quote/{quoteId}';
-
-        var body;
-        var queryParameters = {};
-        var headers = {};
-        var form = {};
-
-        if (this.token.isQuery) {
-            queryParameters[this.token.headerOrQueryName] = this.token.value;
-        } else if (this.token.headerOrQueryName) {
-            headers[this.token.headerOrQueryName] = this.token.value;
-        } else {
-            headers['Authorization'] = 'Bearer ' + this.token.value;
-        }
-
+        queryParameters = this.setAuthQueries(queryParameters);
+        headers = this.setAuthHeaders(headers);
+        headers['Accept'] = ['application/json, text/csv, text/plain'];
         headers['Content-Type'] = ['application/json'];
 
         if (parameters['quote'] !== undefined) {
@@ -1206,55 +1148,57 @@ var Sirena = (function() {
             queryParameters['format'] = parameters['format'];
         }
 
-        if (parameters.$queryParameters) {
-            Object.keys(parameters.$queryParameters)
-                .forEach(function(parameterName) {
-                    var parameter = parameters.$queryParameters[parameterName];
-                    queryParameters[parameterName] = parameter;
-                });
-        }
+        queryParameters = mergeQueryParams(parameters, queryParameters);
 
         this.request('PUT', domain + path, parameters, body, headers, queryParameters, form, deferred);
 
         return deferred.promise;
     };
     /**
-     * Returns a filterable list of quotes
+     * Returns a filterable list of quotes.
      * @method
      * @name Sirena#getQuotes
-     * @param {string} status - The status to filter
-     * @param {string} createdBefore - The start date to filter quotes by their creation date
-     * @param {string} createdAfter - The end date to filter quotes by their creation date
-     * @param {string} acceptedBefore - The start date to filter quotes by their accepted date
-     * @param {string} acceptedAfter - The end date to filter quotes by their accepted date
-     * @param {string} rejectedBefore - The start date to filter quotes by their rejected date
-     * @param {string} rejectedAfter - The end date to filter quotes by their rejected date
-     * @param {string} format - An optional flag to force a response format. Note that the API also supports content negotiation and honors the Accept header.
-     * 
+     * @param {object} parameters - method options and parameters
+     * @param {string} parameters.before - Limits the results only to the prospects created before the one provided in this parameter (not included)
+     * @param {string} parameters.after - Limits the results only to the prospects created after the one provided in this parameter (not included)
+     * @param {number} parameters.limit - The maximum number of items that must be returned (A multiple number of 100 and no more than 1000 is recommended)
+     * @param {string} parameters.status - The status to filter.
+     * @param {string} parameters.createdBefore - The start date to filter quotes by their creation date.
+     * @param {string} parameters.createdAfter - The end date to filter quotes by their creation date.
+     * @param {string} parameters.acceptedBefore - The start date to filter quotes by their accepted date.
+     * @param {string} parameters.acceptedAfter - The end date to filter quotes by their accepted date.
+     * @param {string} parameters.rejectedBefore - The start date to filter quotes by their rejected date.
+     * @param {string} parameters.rejectedAfter - The end date to filter quotes by their rejected date.
+     * @param {string} parameters.format - An optional flag to force a response format. Note that the API also supports content negotiation and honors the Accept header.
      */
     Sirena.prototype.getQuotes = function(parameters) {
         if (parameters === undefined) {
             parameters = {};
         }
         var deferred = Q.defer();
+        var domain = this.domain,
+            path = '/prospects/quotes';
+        var body = {},
+            queryParameters = {},
+            headers = {},
+            form = {};
 
-        var domain = this.domain;
-        var path = '/prospects/quotes';
+        queryParameters = this.setAuthQueries(queryParameters);
+        headers = this.setAuthHeaders(headers);
+        headers['Accept'] = ['application/json, text/csv, text/plain'];
+        headers['Content-Type'] = ['application/json'];
 
-        var body;
-        var queryParameters = {};
-        var headers = {};
-        var form = {};
-
-        if (this.token.isQuery) {
-            queryParameters[this.token.headerOrQueryName] = this.token.value;
-        } else if (this.token.headerOrQueryName) {
-            headers[this.token.headerOrQueryName] = this.token.value;
-        } else {
-            headers['Authorization'] = 'Bearer ' + this.token.value;
+        if (parameters['before'] !== undefined) {
+            queryParameters['before'] = parameters['before'];
         }
 
-        headers['Content-Type'] = ['application/json'];
+        if (parameters['after'] !== undefined) {
+            queryParameters['after'] = parameters['after'];
+        }
+
+        if (parameters['limit'] !== undefined) {
+            queryParameters['limit'] = parameters['limit'];
+        }
 
         if (parameters['status'] !== undefined) {
             queryParameters['status'] = parameters['status'];
@@ -1288,13 +1232,7 @@ var Sirena = (function() {
             queryParameters['format'] = parameters['format'];
         }
 
-        if (parameters.$queryParameters) {
-            Object.keys(parameters.$queryParameters)
-                .forEach(function(parameterName) {
-                    var parameter = parameters.$queryParameters[parameterName];
-                    queryParameters[parameterName] = parameter;
-                });
-        }
+        queryParameters = mergeQueryParams(parameters, queryParameters);
 
         this.request('GET', domain + path, parameters, body, headers, queryParameters, form, deferred);
 
@@ -1304,91 +1242,65 @@ var Sirena = (function() {
      * Returns information about the available notification topics. Topics can be subscribed to using Subscriptions.
      * @method
      * @name Sirena#getTopics
-     * @param {string} format - An optional flag to force a response format. Note that the API also supports content negotiation and honors the Accept header.
-     * 
+     * @param {object} parameters - method options and parameters
+     * @param {string} parameters.format - An optional flag to force a response format. Note that the API also supports content negotiation and honors the Accept header.
      */
     Sirena.prototype.getTopics = function(parameters) {
         if (parameters === undefined) {
             parameters = {};
         }
         var deferred = Q.defer();
+        var domain = this.domain,
+            path = '/notifications/topics';
+        var body = {},
+            queryParameters = {},
+            headers = {},
+            form = {};
 
-        var domain = this.domain;
-        var path = '/notifications/topics';
-
-        var body;
-        var queryParameters = {};
-        var headers = {};
-        var form = {};
-
-        if (this.token.isQuery) {
-            queryParameters[this.token.headerOrQueryName] = this.token.value;
-        } else if (this.token.headerOrQueryName) {
-            headers[this.token.headerOrQueryName] = this.token.value;
-        } else {
-            headers['Authorization'] = 'Bearer ' + this.token.value;
-        }
-
+        queryParameters = this.setAuthQueries(queryParameters);
+        headers = this.setAuthHeaders(headers);
+        headers['Accept'] = ['application/json, text/csv, text/plain'];
         headers['Content-Type'] = ['application/json'];
 
         if (parameters['format'] !== undefined) {
             queryParameters['format'] = parameters['format'];
         }
 
-        if (parameters.$queryParameters) {
-            Object.keys(parameters.$queryParameters)
-                .forEach(function(parameterName) {
-                    var parameter = parameters.$queryParameters[parameterName];
-                    queryParameters[parameterName] = parameter;
-                });
-        }
+        queryParameters = mergeQueryParams(parameters, queryParameters);
 
         this.request('GET', domain + path, parameters, body, headers, queryParameters, form, deferred);
 
         return deferred.promise;
     };
     /**
-     * Returns the list of active subscriptions. Note that subscriptions are currently limited to one per group.
+     * Returns the list of active subscri.ptions. Note that subscriptions are currently limited to one per group.
      * @method
      * @name Sirena#getActiveSubscriptions
-     * @param {string} format - An optional flag to force a response format. Note that the API also supports content negotiation and honors the Accept header.
-     * 
+     * @param {object} parameters - method options and parameters
+     * @param {string} parameters.format - An optional flag to force a response format. Note that the API also supports content negotiation and honors the Accept header.
      */
     Sirena.prototype.getActiveSubscriptions = function(parameters) {
         if (parameters === undefined) {
             parameters = {};
         }
         var deferred = Q.defer();
+        var domain = this.domain,
+            path = '/notifications/subscriptions';
+        var body = {},
+            queryParameters = {},
+            headers = {},
+            form = {};
 
-        var domain = this.domain;
-        var path = '/notifications/subscriptions';
-
-        var body;
-        var queryParameters = {};
-        var headers = {};
-        var form = {};
-
-        if (this.token.isQuery) {
-            queryParameters[this.token.headerOrQueryName] = this.token.value;
-        } else if (this.token.headerOrQueryName) {
-            headers[this.token.headerOrQueryName] = this.token.value;
-        } else {
-            headers['Authorization'] = 'Bearer ' + this.token.value;
-        }
-
+        queryParameters = this.setAuthQueries(queryParameters);
+        headers = this.setAuthHeaders(headers);
+        headers['Accept'] = ['application/json, text/csv, text/plain'];
         headers['Content-Type'] = ['application/json'];
 
         if (parameters['format'] !== undefined) {
             queryParameters['format'] = parameters['format'];
         }
 
-        if (parameters.$queryParameters) {
-            Object.keys(parameters.$queryParameters)
-                .forEach(function(parameterName) {
-                    var parameter = parameters.$queryParameters[parameterName];
-                    queryParameters[parameterName] = parameter;
-                });
-        }
+        queryParameters = mergeQueryParams(parameters, queryParameters);
 
         this.request('GET', domain + path, parameters, body, headers, queryParameters, form, deferred);
 
@@ -1398,32 +1310,25 @@ var Sirena = (function() {
      * Subscribe to notification topics. Note that subscriptions are currently limited to one per group, and subscribing twice will result in the first subscription being deactivated.
      * @method
      * @name Sirena#newSubscription
-     * @param {} subscription - Sirena API for lead providers and prospect data manipulation
-     * @param {string} format - An optional flag to force a response format. Note that the API also supports content negotiation and honors the Accept header.
-     * 
+     * @param {object} parameters - method options and parameters
+     * @param {} parameters.subscription - Sirena API for lead providers and prospect data manipulation.
+     * @param {string} parameters.format - An optional flag to force a response format. Note that the API also supports content negotiation and honors the Accept header.
      */
     Sirena.prototype.newSubscription = function(parameters) {
         if (parameters === undefined) {
             parameters = {};
         }
         var deferred = Q.defer();
+        var domain = this.domain,
+            path = '/notifications/subscriptions';
+        var body = {},
+            queryParameters = {},
+            headers = {},
+            form = {};
 
-        var domain = this.domain;
-        var path = '/notifications/subscriptions';
-
-        var body;
-        var queryParameters = {};
-        var headers = {};
-        var form = {};
-
-        if (this.token.isQuery) {
-            queryParameters[this.token.headerOrQueryName] = this.token.value;
-        } else if (this.token.headerOrQueryName) {
-            headers[this.token.headerOrQueryName] = this.token.value;
-        } else {
-            headers['Authorization'] = 'Bearer ' + this.token.value;
-        }
-
+        queryParameters = this.setAuthQueries(queryParameters);
+        headers = this.setAuthHeaders(headers);
+        headers['Accept'] = ['application/json, text/csv, text/plain'];
         headers['Content-Type'] = ['application/json'];
 
         if (parameters['subscription'] !== undefined) {
@@ -1439,48 +1344,35 @@ var Sirena = (function() {
             queryParameters['format'] = parameters['format'];
         }
 
-        if (parameters.$queryParameters) {
-            Object.keys(parameters.$queryParameters)
-                .forEach(function(parameterName) {
-                    var parameter = parameters.$queryParameters[parameterName];
-                    queryParameters[parameterName] = parameter;
-                });
-        }
+        queryParameters = mergeQueryParams(parameters, queryParameters);
 
         this.request('POST', domain + path, parameters, body, headers, queryParameters, form, deferred);
 
         return deferred.promise;
     };
     /**
-     * Returns an active notification subscription by its ID
+     * Returns an active notification subscription by its ID.
      * @method
      * @name Sirena#getActiveSubscriptionById
-     * @param {string} subscriptionId - The id of the subscription
-     * @param {string} format - An optional flag to force a response format. Note that the API also supports content negotiation and honors the Accept header.
-     * 
+     * @param {object} parameters - method options and parameters
+     * @param {string} parameters.subscriptionId - The id of the subscription.
+     * @param {string} parameters.format - An optional flag to force a response format. Note that the API also supports content negotiation and honors the Accept header.
      */
     Sirena.prototype.getActiveSubscriptionById = function(parameters) {
         if (parameters === undefined) {
             parameters = {};
         }
         var deferred = Q.defer();
+        var domain = this.domain,
+            path = '/notifications/subscription/{subscriptionId}';
+        var body = {},
+            queryParameters = {},
+            headers = {},
+            form = {};
 
-        var domain = this.domain;
-        var path = '/notifications/subscription/{subscriptionId}';
-
-        var body;
-        var queryParameters = {};
-        var headers = {};
-        var form = {};
-
-        if (this.token.isQuery) {
-            queryParameters[this.token.headerOrQueryName] = this.token.value;
-        } else if (this.token.headerOrQueryName) {
-            headers[this.token.headerOrQueryName] = this.token.value;
-        } else {
-            headers['Authorization'] = 'Bearer ' + this.token.value;
-        }
-
+        queryParameters = this.setAuthQueries(queryParameters);
+        headers = this.setAuthHeaders(headers);
+        headers['Accept'] = ['application/json, text/csv, text/plain'];
         headers['Content-Type'] = ['application/json'];
 
         path = path.replace('{subscriptionId}', parameters['subscriptionId']);
@@ -1494,48 +1386,35 @@ var Sirena = (function() {
             queryParameters['format'] = parameters['format'];
         }
 
-        if (parameters.$queryParameters) {
-            Object.keys(parameters.$queryParameters)
-                .forEach(function(parameterName) {
-                    var parameter = parameters.$queryParameters[parameterName];
-                    queryParameters[parameterName] = parameter;
-                });
-        }
+        queryParameters = mergeQueryParams(parameters, queryParameters);
 
         this.request('GET', domain + path, parameters, body, headers, queryParameters, form, deferred);
 
         return deferred.promise;
     };
     /**
-     * Deactivates a subscription by its ID
+     * Deactivates a subscription by its ID.
      * @method
      * @name Sirena#deactivateSubscription
-     * @param {string} subscriptionId - The id of the subscription
-     * @param {string} format - An optional flag to force a response format. Note that the API also supports content negotiation and honors the Accept header.
-     * 
+     * @param {object} parameters - method options and parameters
+     * @param {string} parameters.subscriptionId - The id of the subscription.
+     * @param {string} parameters.format - An optional flag to force a response format. Note that the API also supports content negotiation and honors the Accept header.
      */
     Sirena.prototype.deactivateSubscription = function(parameters) {
         if (parameters === undefined) {
             parameters = {};
         }
         var deferred = Q.defer();
+        var domain = this.domain,
+            path = '/notifications/subscription/{subscriptionId}';
+        var body = {},
+            queryParameters = {},
+            headers = {},
+            form = {};
 
-        var domain = this.domain;
-        var path = '/notifications/subscription/{subscriptionId}';
-
-        var body;
-        var queryParameters = {};
-        var headers = {};
-        var form = {};
-
-        if (this.token.isQuery) {
-            queryParameters[this.token.headerOrQueryName] = this.token.value;
-        } else if (this.token.headerOrQueryName) {
-            headers[this.token.headerOrQueryName] = this.token.value;
-        } else {
-            headers['Authorization'] = 'Bearer ' + this.token.value;
-        }
-
+        queryParameters = this.setAuthQueries(queryParameters);
+        headers = this.setAuthHeaders(headers);
+        headers['Accept'] = ['application/json, text/csv, text/plain'];
         headers['Content-Type'] = ['application/json'];
 
         path = path.replace('{subscriptionId}', parameters['subscriptionId']);
@@ -1549,15 +1428,43 @@ var Sirena = (function() {
             queryParameters['format'] = parameters['format'];
         }
 
-        if (parameters.$queryParameters) {
-            Object.keys(parameters.$queryParameters)
-                .forEach(function(parameterName) {
-                    var parameter = parameters.$queryParameters[parameterName];
-                    queryParameters[parameterName] = parameter;
-                });
-        }
+        queryParameters = mergeQueryParams(parameters, queryParameters);
 
         this.request('DELETE', domain + path, parameters, body, headers, queryParameters, form, deferred);
+
+        return deferred.promise;
+    };
+    /**
+     * Returns the active integration
+     * @method
+     * @name Sirena#getIntegrations
+     * @param {object} parameters - method options and parameters
+     * @param {string} parameters.format - An optional flag to force a response format. Note that the API also supports content negotiation and honors the Accept header.
+     */
+    Sirena.prototype.getIntegrations = function(parameters) {
+        if (parameters === undefined) {
+            parameters = {};
+        }
+        var deferred = Q.defer();
+        var domain = this.domain,
+            path = '/integrations';
+        var body = {},
+            queryParameters = {},
+            headers = {},
+            form = {};
+
+        queryParameters = this.setAuthQueries(queryParameters);
+        headers = this.setAuthHeaders(headers);
+        headers['Accept'] = ['application/json, text/csv, text/plain'];
+        headers['Content-Type'] = ['application/json'];
+
+        if (parameters['format'] !== undefined) {
+            queryParameters['format'] = parameters['format'];
+        }
+
+        queryParameters = mergeQueryParams(parameters, queryParameters);
+
+        this.request('GET', domain + path, parameters, body, headers, queryParameters, form, deferred);
 
         return deferred.promise;
     };
@@ -1565,4 +1472,4 @@ var Sirena = (function() {
     return Sirena;
 })();
 
-module.exports = Sirena;
+exports.Sirena = Sirena;
