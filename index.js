@@ -1472,4 +1472,4 @@ var Sirena = (function() {
     return Sirena;
 })();
 
-exports.Sirena = Sirena;
+module.exports = Sirena;
