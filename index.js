@@ -509,6 +509,7 @@ var Sirena = (function() {
          * @param {string} parameters.claimStart - The start date to filter prospects by their claim date (alias of claimAfter).
          * @param {string} parameters.claimedBefore - The end date to filter prospects by their claim date.
          * @param {string} parameters.claimEnd - The end date to filter prospects by their claim date (alias of claimBefore).
+         * @param {string} parameters.group - The id of a group to filter prospects
          * @param {array} parameters.additionalData - List of filters for additionalData on format `[FIELD][OPERATOR][VALUE]`.
     * FIELD: Can be any additional data field
     * OPERATOR: Can be =, >=, >, <=, < or ~ (contains)
@@ -601,6 +602,10 @@ var Sirena = (function() {
 
         if (parameters['claimEnd'] !== undefined) {
             queryParameters['claimEnd'] = parameters['claimEnd'];
+        }
+
+        if (parameters['group'] !== undefined) {
+            queryParameters['group'] = parameters['group'];
         }
 
         if (parameters['additionalData'] !== undefined) {
@@ -1239,6 +1244,53 @@ var Sirena = (function() {
         return deferred.promise;
     };
     /**
+     * Transfer a Prospect to a group
+     * @method
+     * @name Sirena#transferProspect
+     * @param {object} parameters - method options and parameters
+     * @param {} parameters.transfer - Define the destination user or group.
+     * @param {string} parameters.prospectId - The id of the prospect.
+     */
+    Sirena.prototype.transferProspect = function(parameters) {
+        if (parameters === undefined) {
+            parameters = {};
+        }
+        var deferred = Q.defer();
+        var domain = this.domain,
+            path = '/prospect/{prospectId}/transfer';
+        var body = {},
+            queryParameters = {},
+            headers = {},
+            form = {};
+
+        queryParameters = this.setAuthQueries(queryParameters);
+        headers = this.setAuthHeaders(headers);
+        headers['Accept'] = ['application/json, text/csv, text/plain'];
+        headers['Content-Type'] = ['application/json'];
+
+        if (parameters['transfer'] !== undefined) {
+            body = parameters['transfer'];
+        }
+
+        if (parameters['transfer'] === undefined) {
+            deferred.reject(new Error('Missing required  parameter: transfer'));
+            return deferred.promise;
+        }
+
+        path = path.replace('{prospectId}', parameters['prospectId']);
+
+        if (parameters['prospectId'] === undefined) {
+            deferred.reject(new Error('Missing required  parameter: prospectId'));
+            return deferred.promise;
+        }
+
+        queryParameters = mergeQueryParams(parameters, queryParameters);
+
+        this.request('POST', domain + path, parameters, body, headers, queryParameters, form, deferred);
+
+        return deferred.promise;
+    };
+    /**
      * Returns information about the available notification topics. Topics can be subscribed to using Subscriptions.
      * @method
      * @name Sirena#getTopics
@@ -1457,6 +1509,55 @@ var Sirena = (function() {
         headers = this.setAuthHeaders(headers);
         headers['Accept'] = ['application/json, text/csv, text/plain'];
         headers['Content-Type'] = ['application/json'];
+
+        if (parameters['format'] !== undefined) {
+            queryParameters['format'] = parameters['format'];
+        }
+
+        queryParameters = mergeQueryParams(parameters, queryParameters);
+
+        this.request('GET', domain + path, parameters, body, headers, queryParameters, form, deferred);
+
+        return deferred.promise;
+    };
+    /**
+     * Returns the agents from group
+     * @method
+     * @name Sirena#getAgents
+     * @param {object} parameters - method options and parameters
+     * @param {string} parameters.group - The groups to get the agents.
+     * @param {string} parameters.active - Status of the agent/s.
+     * @param {string} parameters.format - An optional flag to force a response format. Note that the API also supports content negotiation and honors the Accept header.
+     */
+    Sirena.prototype.getAgents = function(parameters) {
+        if (parameters === undefined) {
+            parameters = {};
+        }
+        var deferred = Q.defer();
+        var domain = this.domain,
+            path = '/agents';
+        var body = {},
+            queryParameters = {},
+            headers = {},
+            form = {};
+
+        queryParameters = this.setAuthQueries(queryParameters);
+        headers = this.setAuthHeaders(headers);
+        headers['Accept'] = ['application/json, text/csv, text/plain'];
+        headers['Content-Type'] = ['application/json'];
+
+        if (parameters['group'] !== undefined) {
+            queryParameters['group'] = parameters['group'];
+        }
+
+        if (parameters['group'] === undefined) {
+            deferred.reject(new Error('Missing required  parameter: group'));
+            return deferred.promise;
+        }
+
+        if (parameters['active'] !== undefined) {
+            queryParameters['active'] = parameters['active'];
+        }
 
         if (parameters['format'] !== undefined) {
             queryParameters['format'] = parameters['format'];
